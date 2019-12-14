@@ -1,0 +1,8 @@
+1) Generate Frequency Domain Spectogram
+    - Figure out what pyedflib returns
+    - Time slices?
+2) Generate usable dataset
+    - Separate regions of ictal, pre-ictal, and inter-ictal
+    - Generate dataset with those records
+
+
