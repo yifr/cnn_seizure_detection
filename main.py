@@ -9,6 +9,7 @@ from utils.preprocess import DataLoader
 logging.basicConfig(filename='debug.log', format='%(asctime)s [%(filename)s:%(lineno)d] %(message)16s',
     datefmt='%Y-%m-%d:%H:%M:%S',
     level=logging.DEBUG)
+
 with open('config.json') as f:
     settings = json.load(f)
 
