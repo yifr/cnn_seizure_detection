@@ -1,0 +1,10 @@
+2019-12-15:02:30:32-4s [pyplot.py:225] Loaded backend macosx version unknown.
+2019-12-15:02:30:32-4s [pyplot.py:225] Loaded backend MacOSX version unknown.
+2019-12-15:02:30:32-4s [caching.py:22] Filename: <cache/ictal_1.hickle> does not exist.
+2019-12-15:02:30:32-4s [preprocess.py:291] Raw signal read: <generator object load_raw_data at 0x1c1a3a2950>
+2019-12-15:02:31:26-4s [pyplot.py:225] Loaded backend macosx version unknown.
+2019-12-15:02:31:26-4s [pyplot.py:225] Loaded backend MacOSX version unknown.
+2019-12-15:02:31:39-4s [pyplot.py:225] Loaded backend macosx version unknown.
+2019-12-15:02:31:39-4s [pyplot.py:225] Loaded backend MacOSX version unknown.
+2019-12-15:02:31:40-4s [caching.py:22] Filename: <cache/ictal_1.hickle> does not exist.
+2019-12-15:02:31:40-4s [preprocess.py:291] Raw signal read: <generator object load_raw_data at 0x1c1adb9950>

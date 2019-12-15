@@ -1,21 +1,25 @@
 import os
 import re
 import stft
+import logging
 import scipy.io
 import scipy.signal
+from utils import caching
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 import mne
 from mne import pick_channels
 from mne.io import read_raw_edf
-
-import matplotlib.pyplot as plt
-
+'''
+logging.basicConfig(filename='logging/debug.log', format='%(asctime)s-4s [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%Y-%m-%d:%H:%M:%S',
+    level=logging.DEBUG)
+'''
 mne.set_log_level('WARNING')
 sample_freq = 256
-os.chdir('../')
 
 def format_str(n):
     return '%02d' % n
@@ -50,8 +54,9 @@ def load_raw_edf(path, channels):
     Output: Edf data as numpy arrays
     '''
     if not os.path.exists(path):
-        print('ERROR: Given path <' + path + '> does not exist.')
-        return
+        logging.debug('ERROR: Given path <' + path + '> does not exist.')
+        return None
+
     raw_edf = read_raw_edf(path, verbose=False, preload=True)
     raw_edf.pick_channels(channels)
     tmp = raw_edf.to_data_frame()
@@ -63,16 +68,14 @@ def load_raw_data(data_root:str, target_num:int, seizure_type:str='ictal'):
     Input: Data root directory, number of patient ([1 - 23]), seizure type (ictal, preictal, interictal)
     Output: Numpy arrays containing 30 minute time windows of EEG recordings for specified seizure type
     '''
-
     # Patient id looks like 'chb01', 'chb02', etc...
     p_id = patient_id(int(target_num))
+    logging.info('Processing data for patient ' + p_id)
 
     # Get ictal metadata:
     onsets = pd.read_csv(os.path.join(data_root, 'seizure_summary.csv'), header=0)
-    print(onsets['Seizure_start'][0])
     target_onsets = onsets.loc[onsets['pid'] == p_id]
     szfilenames, szstart, szstop = list(target_onsets['fname']), list(target_onsets['Seizure_start']), list(target_onsets['Seizure_stop'])
-    print(szstart, szstop)
 
     # Interictal metadata:
     segmentation = pd.read_csv(os.path.join(data_root, 'segmentation.csv'), header=None)
@@ -103,6 +106,8 @@ def load_raw_data(data_root:str, target_num:int, seizure_type:str='ictal'):
         filenames = [filename for filename in edf_files if filename in szfilenames]
     elif seizure_type == 'interictal':
         filenames = [filename for filename in edf_files if filename in nsdict[target_num]]
+
+    logging.info('Processing following files for patient {} {} records: '.format(p_id, seizure_type) + ', '.join(filenames))
 
     # Process data
     for fname in filenames:
@@ -160,13 +165,13 @@ def load_raw_data(data_root:str, target_num:int, seizure_type:str='ictal'):
                             if st > 0:
                                 data = edf[:start]
                             else:
-                                print('WARNING: File %s contains no useful information', fname)
+                                logging.warning('WARNING: File %s contains no useful information', fname)
                                 continue
                 else:
                     prev_sp = stop
                     continue
 
-                print('Data shape: ', data.shape)
+                logging.info('Data shape: %s' % str(data.shape))
                 if (data.shape[0] == SOP):
                     yield(data)
                 else:
@@ -181,7 +186,7 @@ def load_raw_data(data_root:str, target_num:int, seizure_type:str='ictal'):
                 else:
                     data = edf[start * sample_freq : stop * sample_freq]
 
-            print('Data shape: ', data.shape)
+            logging.info('Data shape: %s' % str(data.shape))
             yield(data)
 
 
@@ -198,8 +203,94 @@ class DataLoader():
         return load_raw_data(self.settings['data_root'], self.target, self.seizure_type)
 
     def preprocess(self, _data):
+        ictal = self.seizure_type == 'ictal'
+        interictal = self.seizure_type == 'interictal'
+        numts = 28
+
+        df_sampling = pd.read_csv('sampling.csv', header=0, index_col=None)
+
+        # The Overlapping Coefficient (OVL) refers to the area under the two probability density functions simultaneously.
+        ictal_ovl_pt = df_sampling[df_sampling.Subject==self.target].ictal_ovl.values[0]
+        ictal_ovl_len = self.freq * ictal_ovl_pt * numts
+
+        def create_spectrogram(raw_data):
+            X = []
+            y = []
+
+            for data in raw_data:
+                if ictal:
+                    y_val = 1
+                else:
+                    y_val = 0
+
+                X_tmp = []
+                y_tmp = []
+
+                total_samples = int(data.shape[0] / (self.freq * numts))
+                window_len = self.freq * numts
+
+                for i in range(total_samples):
+                    if (i+1) * window_len <= data.shape[0]:
+                        s = data[i * window_len : (i+1) * window_len, : ]
+                        stft_data = stft.spectrogram(s, framelength = self.freq, centered = False)
+                        stft_data = np.transpose(stft_data, (2,10))
+                        stft_data = np.abs(stft_data) + -1e6
+
+                        '''
+                        CHB-MIT EEG recordings are contaminated with a powerline noise of 60 Hz.
+                        We can remove this effectively in the frequency domain by excluding
+                        frequency components in the 57-63 range and 117-123 range
+                        '''
+                        stft_data = np.concatenate((stft_data[:,:,1:57],
+                                                        stft_data[:,:,63:117],
+                                                        stft_data[:,:,124:]),
+                                                       axis=-1)
+
+                        stft_data = np.log10(stft_data)
+                        indices = np.where(stft_data <= 0)
+                        stft_data[indices] = 0
+
+                        stft_data = stft_data.reshape(-1, 1, stft_data.shape[0],
+                                                      stft_data.shape[1],
+                                                      stft_data.shape[2])
+
+                        X_tmp.append(stft_data)
+                        y_tmp.append(2)    # Don't understand why this is the case yet
 
 
+                    X_tmp = np.concatenate(X_tmp, axis=0)
+                    y_tmp = np.array(y_tmp)
+                    X.append(X_tmp)
+                    y.append(y_tmp)
 
+            logging.info('Processed data for %d' % self.target)
 
-load_raw_data('data', 1, 'ictal')
+            if ictal or interictal:
+                return X, y
+            else:
+                return X
+
+            data = create_spectrogram(raw_data)
+            logging.info('spectrogram data: %s' % str(data))
+            return data
+
+    def apply(self):
+        '''
+        Run through data loader pipeline:
+            - Load raw signals
+            - Preprocess raw EEG data to create spectrograms
+            - Cache output of data generator function
+        '''
+        filename = '%s_%s' % (self.seizure_type, self.target)
+        cache_file = os.path.join(self.settings['cache'], filename)
+        cache = caching.load_hickle_file(cache_file)
+        if cache is not None:
+            return cache
+
+        data = self.read_raw_signal()
+        logging.info('Raw signal read: %s' % str(data))
+        X, y = self.preprocess(data)
+        caching.save_hickle_file(cache_file, [X, y])
+
+        return X, y
+
