@@ -6,9 +6,20 @@ import numpy as np
 import pandas as pd
 
 from utils.preprocess import DataLoader
-logging.basicConfig(filename='debug.log', format='%(asctime)s [%(filename)s:%(lineno)d] %(message)16s',
+
+logging.basicConfig(filename='logging/debug.log', format='%(asctime)s [%(filename)s:%(lineno)d] %(message)16s',
     datefmt='%Y-%m-%d:%H:%M:%S',
     level=logging.DEBUG)
+
+root = logging.getLogger()
+root.setLevel(logging.DEBUG)
+
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s [%(filename)s:%(lineno)d] %(message)16s',
+    datefmt='%Y-%m-%d:%H:%M:%S')
+handler.setFormatter(formatter)
+root.addHandler(handler)
 
 with open('config.json') as f:
     settings = json.load(f)
