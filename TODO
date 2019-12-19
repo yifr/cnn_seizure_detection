@@ -1,8 +1,15 @@
-1) Generate Frequency Domain Spectogram
-    - Figure out what pyedflib returns
-    - Time slices?
-2) Generate usable dataset
-    - Separate regions of ictal, pre-ictal, and inter-ictal
-    - Generate dataset with those records
+1) Process raw data into usable datasets
+    1a) Using list of start and stop times for each patients seizures,
+        create 30 minute time intervals for pre-ictal seizure onset time √
+    1b) Oversample pre-ictal times so it has equivalent ictal and inter-ictal √
 
+2) Cross validation
+    2a) Train test split
+    2b) Leave one out per-patient testing
 
+3) Build Model
+
+4) Evaluate model
+    4a) Sensitivity / Specificity
+    4b) AUC
+    4c) Visualize weights? 

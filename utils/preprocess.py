@@ -173,9 +173,9 @@ def load_raw_data(data_root:str, target_num:int, seizure_type:str='ictal'):
 
         elif seizure_type == 'interictal':
             if fname in sifnames:
-                start = sistart[sistart.index(fname)]
-                stop = sistop[sistop.index(fname)]
-                if sp < 0:
+                start = sistart[sifnames.index(fname)]
+                stop = sistop[sifnames.index(fname)]
+                if stop < 0:
                     data = edf[start * sample_freq:]
                 else:
                     data = edf[start * sample_freq : stop * sample_freq]
@@ -224,15 +224,15 @@ class DataLoader():
                 y_tmp = []
 
                 total_samples = int(data.shape[0] / (self.freq * numts)) + 1
-                window_len = self.freq * numts
+                window_len = int(self.freq * numts)
                 logging.info('Total samples = {}, window_len = {}'.format(total_samples, window_len))
                 for i in range(total_samples):
                     if (i+1) * window_len <= data.shape[0]:
                         s = data[i * window_len : (i+1) * window_len, : ]
+
                         stft_data = stft.spectrogram(s, framelength = self.freq, centered = False)
-                        #logging.info('Fourier Transform Data Shape: %s', str(stft_data.shape))
                         stft_data = np.transpose(stft_data, (2,1,0))
-                        stft_data = np.abs(stft_data) + -1e6
+                        stft_data = np.abs(stft_data) + 1e-6
                         '''
                         CHB-MIT EEG recordings are contaminated with a powerline noise of 60 Hz.
                         We can remove this effectively in the frequency domain by excluding
@@ -245,6 +245,7 @@ class DataLoader():
                         stft_data = np.log10(stft_data)
                         indices = np.where(stft_data <= 0)
                         stft_data[indices] = 0
+
                         stft_data = stft_data.reshape(-1, 1, stft_data.shape[0],
                                                       stft_data.shape[1],
                                                       stft_data.shape[2])
@@ -255,13 +256,12 @@ class DataLoader():
                 # Oversample ictal cases for data parity
                 if ictal:
                     i = 1
-                    while window_len + (i + 1) * ictal_ovl_len <= data.shape[0]:
-                        s = data[i * ictal_ovl_len : i * ictal_ovl_len + window_len, :]
+                    while window_len + (i + 1)*ictal_ovl_len <= data.shape[0]:
+                        s = data[i*ictal_ovl_len : i*ictal_ovl_len + window_len, :]
 
                         stft_data = stft.spectrogram(s, framelength = self.freq, centered = False)
-                        #logging.info('Fourier Transform Data Shape: %s', str(stft_data.shape))
                         stft_data = np.transpose(stft_data, (2,1,0))
-                        stft_data = np.abs(stft_data) + -1e6
+                        stft_data = np.abs(stft_data) + 1e-6
                         stft_data = np.concatenate((stft_data[:,:,1:57],
                                                         stft_data[:,:,63:117],
                                                         stft_data[:,:,124:]),
@@ -270,8 +270,8 @@ class DataLoader():
                         indices = np.where(stft_data <= 0)
                         stft_data[indices] = 0
 
-                        proj = np.sum(stft_data,axis=(0,1),keepdims=False)
-                        self.global_proj += proj/1000.0
+                        #proj = np.sum(stft_data,axis=(0,1),keepdims=False)
+                        #self.global_proj += proj/1000.0
 
                         stft_data = stft_data.reshape(-1, 1, stft_data.shape[0],
                                                       stft_data.shape[1],
@@ -292,7 +292,6 @@ class DataLoader():
                 return X
 
         data = create_spectrogram(_data)
-        #logging.info('spectrogram data: %s' % str(data))
         return data
 
     def apply(self):
